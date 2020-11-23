@@ -20,10 +20,8 @@ public class AsyncCachedThreadWorker extends ThreadWorker {
      */
     @Override
     protected void runTask(Task task) {
-        Future<?> future = executorService.submit(task);
-
         synchronized (pendingTasks) {
-            pendingTasks.add(future);
+            pendingTasks.add(executorService.submit(task));
         }
     }
 
@@ -33,14 +31,18 @@ public class AsyncCachedThreadWorker extends ThreadWorker {
     @Override
     public void shutdown(boolean waitForWorkerThreadCompletion) throws InterruptedException {
         super.shutdown(waitForWorkerThreadCompletion);
-        executorService.shutdown();
 
         if (waitForWorkerThreadCompletion) {
             synchronized (pendingTasks) {
                 for (Future<?> pendingTask : pendingTasks) {
-                    pendingTask.wait();
+                    synchronized (pendingTask) {
+                        if (!pendingTask.isDone())
+                            pendingTask.wait();
+                    }
                 }
             }
         }
+
+        executorService.shutdown();
     }
 }
